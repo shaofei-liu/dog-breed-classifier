@@ -1,6 +1,6 @@
 """
 Dog Breed Classification API Server
-FastAPI 服务器用于模型推理
+FastAPI server for model inference
 """
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
@@ -13,18 +13,18 @@ from torchvision import transforms
 import io
 import logging
 
-# 配置日志
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 初始化 FastAPI
+# Initialize FastAPI
 app = FastAPI(
     title="Dog Breed Classification API",
-    description="使用 Vision Transformer 识别犬种",
+    description="Dog breed classification using Vision Transformer",
     version="1.0.0"
 )
 
-# 允许跨域请求
+# Allow cross-origin requests
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -33,13 +33,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 模型参数
+# Model parameters
 MODEL_TYPE = "ViT-B_16"
 CHECKPOINT_PATH = "./output/sample_run_checkpoint.bin"
 IMG_SIZE = 448
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# 120个犬种类别
+# 120 dog breed categories
 CLASS_LABELS = [
     "Chihuahua", "Japanese_Spaniel", "Maltese", "Pekingese", "Shih_Tzu",
     "Blenheim_Spaniel", "Papillon", "Toy_Terrier", "Rhodesian_Ridgeback", "Afghan_Hound",
@@ -67,7 +67,7 @@ CLASS_LABELS = [
     "Standard_Poodle", "Mexican_Hairless", "Dingo", "Dhole", "African_Hunting_Dog"
 ]
 
-# 图像预处理
+# Image preprocessing
 transform = transforms.Compose([
     transforms.Resize((600, 600), Image.BILINEAR),
     transforms.CenterCrop((IMG_SIZE, IMG_SIZE)),
@@ -75,24 +75,24 @@ transform = transforms.Compose([
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
 
-# 全局模型变量
+# Global model variable
 model = None
 
 def load_model():
     """加载模型"""
     global model
     try:
-        logger.info(f"设备: {DEVICE}")
-        logger.info(f"加载配置: {MODEL_TYPE}")
+        logger.info(f"Device: {DEVICE}")
+        logger.info(f"Loading config: {MODEL_TYPE}")
         
         config = CONFIGS[MODEL_TYPE]
         config.split = 'overlap'
         config.slide_step = 12
         
-        logger.info("初始化模型 (120个犬种)...")
+        logger.info("Initializing model (120 dog breeds)...")
         model = VisionTransformer(config, IMG_SIZE, zero_head=True, num_classes=120)
         
-        logger.info(f"加载检查点: {CHECKPOINT_PATH}")
+        logger.info(f"Loading checkpoint: {CHECKPOINT_PATH}")
         checkpoint = torch.load(CHECKPOINT_PATH, map_location=DEVICE, weights_only=False)
         
         state_dict = checkpoint.get("model", checkpoint)
@@ -101,21 +101,21 @@ def load_model():
         model.to(DEVICE)
         model.eval()
         
-        logger.info("✓ 模型加载成功")
+        logger.info("✓ Model loaded successfully")
         return True
     except Exception as e:
-        logger.error(f"✗ 模型加载失败: {e}")
+        logger.error(f"✗ Model loading failed: {e}")
         return False
 
-# 启动时加载模型
+# Load model on startup
 @app.on_event("startup")
 async def startup_event():
     if not load_model():
-        logger.warning("模型加载失败，API 将在演示模式运行")
+        logger.warning("Model loading failed, API will run in demo mode")
 
 @app.get("/api/health")
 async def health_check():
-    """健康检查端点"""
+    """Health check endpoint"""
     return {
         "status": "ok",
         "device": str(DEVICE),
@@ -126,26 +126,26 @@ async def health_check():
 @app.post("/api/predict")
 async def predict(file: UploadFile = File(...)):
     """
-    预测犬种
+    Predict dog breed
     
     Args:
-        file: 上传的图片文件
+        file: Image file to upload
         
     Returns:
-        json: 包含预测结果的字典
+        json: Dictionary containing prediction results
     """
     if model is None:
-        raise HTTPException(status_code=503, detail="模型未加载")
+        raise HTTPException(status_code=503, detail="Model not loaded")
     
     try:
-        # 读取图片
+        # Read image
         contents = await file.read()
         image = Image.open(io.BytesIO(contents)).convert("RGB")
         
-        # 预处理
+        # Preprocess
         image_tensor = transform(image).unsqueeze(0).to(DEVICE)
         
-        # 推理
+        # Inference
         with torch.no_grad():
             logits = model(image_tensor)
             probs = torch.softmax(logits, dim=1)
@@ -154,14 +154,14 @@ async def predict(file: UploadFile = File(...)):
         class_idx = class_idx.item()
         confidence = confidence.item()
         
-        # 获取 Top 5 预测
+        # Get Top 5 predictions
         top_5_indices = torch.argsort(probs[0], descending=True)[:5]
         top_5_predictions = {
             CLASS_LABELS[idx.item()]: float(probs[0, idx].item())
             for idx in top_5_indices
         }
         
-        logger.info(f"预测: {CLASS_LABELS[class_idx]} ({confidence:.2%})")
+        logger.info(f"Prediction: {CLASS_LABELS[class_idx]} ({confidence:.2%})")
         
         return JSONResponse({
             "success": True,
@@ -171,12 +171,12 @@ async def predict(file: UploadFile = File(...)):
         })
     
     except Exception as e:
-        logger.error(f"预测出错: {e}")
+        logger.error(f"Prediction error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/api/breeds")
 async def get_breeds():
-    """获取所有支持的犬种列表"""
+    """Get all supported dog breed list"""
     return {
         "total": len(CLASS_LABELS),
         "breeds": CLASS_LABELS

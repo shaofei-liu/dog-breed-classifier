@@ -99,8 +99,8 @@ dog-breed-classifier/
 
 ## Deployment
 
-### Hugging Face Spaces
-Live demo: https://huggingface.co/spaces/WilliamCass/dog-breed-classification
+### Live Demo
+Visit: https://www.shaofeiliu.com/#dog-breed-classifier
 
 ### Local/Server Deployment
 Deploy the Dockerfile to any Docker-compatible platform (AWS, Google Cloud, local server, etc.)
@@ -177,9 +177,11 @@ See `requirements.txt` for all dependencies. Key packages:
 
 This project is provided for educational and commercial use.
 
-## Contact
+## Contact & Support
 
-For questions or issues, please open an issue on GitHub.
+For questions or issues:
+1. Visit my personal website: https://www.shaofeiliu.com
+2. Open an issue on GitHub
 
 ---
 

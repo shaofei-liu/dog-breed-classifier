@@ -144,13 +144,26 @@ async def predict(file: UploadFile = File(None), url: str = None):
         # Handle file upload
         if file and file.filename:
             try:
+                # Validate file type
+                if file.content_type and "image" not in file.content_type.lower():
+                    raise HTTPException(status_code=400, detail="Please upload an image file (JPEG, PNG, GIF, WebP, etc.)")
+                
                 logger.info(f"Processing file upload: {file.filename}")
                 contents = await file.read()
                 logger.info(f"File size: {len(contents)} bytes")
                 if not contents:
                     raise HTTPException(status_code=400, detail="File is empty. Please upload an image file.")
-                image = Image.open(io.BytesIO(contents)).convert("RGB")
-                logger.info(f"Image loaded: {image.size}")
+                
+                try:
+                    image = Image.open(io.BytesIO(contents)).convert("RGB")
+                    logger.info(f"Image loaded: {image.size}")
+                except Exception as e:
+                    error_str = str(e).lower()
+                    logger.error(f"Failed to parse uploaded image: {e}")
+                    if "cannot identify" in error_str or "unidentified" in error_str:
+                        raise HTTPException(status_code=400, detail="The uploaded file is not a valid image. Please upload a JPEG, PNG, GIF, or WebP file.")
+                    else:
+                        raise HTTPException(status_code=400, detail=f"Could not process image: {str(e)}")
             except HTTPException:
                 raise
             except Exception as e:
@@ -205,7 +218,14 @@ async def predict(file: UploadFile = File(None), url: str = None):
                     # It's a direct image URL
                     if not response.content:
                         raise HTTPException(status_code=400, detail="Empty response from image URL")
-                    image = Image.open(io.BytesIO(response.content)).convert("RGB")
+                    try:
+                        image = Image.open(io.BytesIO(response.content)).convert("RGB")
+                    except Exception as e:
+                        error_str = str(e).lower()
+                        if "cannot identify" in error_str or "unidentified" in error_str:
+                            raise HTTPException(status_code=400, detail="The file at this URL is not a valid image. Please provide a direct link to a JPEG, PNG, GIF, or WebP image file.")
+                        else:
+                            raise HTTPException(status_code=400, detail=f"Failed to load image from URL: {str(e)}")
             except HTTPException:
                 raise
             except requests.RequestException as e:

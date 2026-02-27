@@ -239,8 +239,37 @@ async def predict(file: UploadFile = File(None), url: str = Query(None)):
         
         # 从文件上传加载图像
         if file:
+            # Validate file type
+            if file.content_type and "image" not in file.content_type.lower():
+                return JSONResponse(
+                    status_code=400,
+                    content={"success": False, "error": "Please upload an image file (JPEG, PNG, GIF, WebP, etc.)"}
+                )
+            
             contents = await file.read()
-            image = Image.open(io.BytesIO(contents)).convert("RGB")
+            
+            # Check if file is empty
+            if not contents or len(contents) == 0:
+                return JSONResponse(
+                    status_code=400,
+                    content={"success": False, "error": "Uploaded file is empty or corrupted"}
+                )
+            
+            try:
+                image = Image.open(io.BytesIO(contents)).convert("RGB")
+            except Exception as e:
+                error_str = str(e).lower()
+                logger.error(f"Failed to parse uploaded image: {e}")
+                if "cannot identify" in error_str or "unidentified" in error_str:
+                    return JSONResponse(
+                        status_code=400,
+                        content={"success": False, "error": "The uploaded file is not a valid image. Please upload a JPEG, PNG, GIF, or WebP file."}
+                    )
+                else:
+                    return JSONResponse(
+                        status_code=400,
+                        content={"success": False, "error": f"Could not process image: {str(e)}"}
+                    )
         
         # 从 URL 加载图像
         elif url:
@@ -304,7 +333,13 @@ async def predict(file: UploadFile = File(None), url: str = Query(None)):
                     )
                 except Exception as e:
                     error_str = str(e).lower()
-                    if "image" in error_str or "decode" in error_str or "format" in error_str:
+                    logger.error(f"Failed to parse image from URL {image_url}: {e}")
+                    if "cannot identify" in error_str or "unidentified" in error_str:
+                        return JSONResponse(
+                            status_code=400,
+                            content={"success": False, "error": "The file at this URL is not a valid image. Please provide a direct link to a JPEG, PNG, GIF, or WebP image file."}
+                        )
+                    elif "image" in error_str or "decode" in error_str or "format" in error_str:
                         return JSONResponse(
                             status_code=400,
                             content={"success": False, "error": "No image found at this URL. Please provide a valid image URL."}

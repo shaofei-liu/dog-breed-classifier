@@ -140,6 +140,9 @@ async def predict(file: UploadFile = File(...)):
     try:
         # Read image
         contents = await file.read()
+        if not contents:
+            raise HTTPException(status_code=400, detail="File is empty. Please upload an image file.")
+        
         image = Image.open(io.BytesIO(contents)).convert("RGB")
         
         # Preprocess
@@ -170,9 +173,11 @@ async def predict(file: UploadFile = File(...)):
             "top_5": top_5_predictions
         })
     
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Prediction error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error(f"Prediction error: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
 
 @app.get("/api/breeds")
 async def get_breeds():

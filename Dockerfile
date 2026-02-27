@@ -13,4 +13,4 @@ COPY . .
 EXPOSE 7860
 
 # 启动应用
-CMD ["python", "app_spaces.py"]
+CMD ["uvicorn", "app_spaces:app", "--host", "0.0.0.0", "--port", "7860"]

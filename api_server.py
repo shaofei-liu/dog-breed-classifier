@@ -124,12 +124,142 @@ async def health_check():
     }
 
 @app.post("/api/predict")
-async def predict(file: UploadFile = File(...)):
+async def predict(file: UploadFile = File(None), url: str = None):
     """
-    Predict dog breed
+    Predict dog breed from file or URL
     
     Args:
-        file: Image file to upload
+        file: Image file to upload (optional)
+        url: Image URL (optional - for webpage image extraction)
+        
+    Returns:
+        json: Dictionary containing prediction results or image list for webpages
+    """
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    
+    try:
+        image = None
+        
+        # Handle file upload
+        if file and file.filename:
+            try:
+                logger.info(f"Processing file upload: {file.filename}")
+                contents = await file.read()
+                logger.info(f"File size: {len(contents)} bytes")
+                if not contents:
+                    raise HTTPException(status_code=400, detail="File is empty. Please upload an image file.")
+                image = Image.open(io.BytesIO(contents)).convert("RGB")
+                logger.info(f"Image loaded: {image.size}")
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Error processing uploaded file: {e}", exc_info=True)
+                raise HTTPException(status_code=400, detail=f"Failed to process image file: {str(e)}")
+        
+        # Handle URL
+        elif url:
+            logger.info(f"Processing URL: {url}")
+            import requests
+            from bs4 import BeautifulSoup
+            
+            try:
+                # Try to fetch from URL
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
+                response = requests.get(url, headers=headers, timeout=10)
+                
+                # Check if it's an HTML page
+                if 'text/html' in response.headers.get('Content-Type', ''):
+                    # Extract images from webpage
+                    soup = BeautifulSoup(response.content, 'html.parser')
+                    images = []
+                    
+                    for img in soup.find_all('img'):
+                        img_src = img.get('src') or img.get('data-src')
+                        if img_src:
+                            # Handle relative URLs
+                            if img_src.startswith('http'):
+                                absolute_url = img_src
+                            elif img_src.startswith('/'):
+                                from urllib.parse import urljoin
+                                absolute_url = urljoin(url, img_src)
+                            else:
+                                continue
+                            
+                            images.append({
+                                'url': absolute_url,
+                                'alt': img.get('alt', 'Image')
+                            })
+                    
+                    if images:
+                        logger.info(f"Found {len(images)} images in webpage")
+                        return JSONResponse({
+                            "type": "image_selection",
+                            "images": images[:20]  # Limit to 20 images
+                        })
+                    else:
+                        raise HTTPException(status_code=400, detail="No images found in webpage")
+                else:
+                    # It's a direct image URL
+                    if not response.content:
+                        raise HTTPException(status_code=400, detail="Empty response from image URL")
+                    image = Image.open(io.BytesIO(response.content)).convert("RGB")
+            except HTTPException:
+                raise
+            except requests.RequestException as e:
+                logger.error(f"Error fetching URL: {e}", exc_info=True)
+                raise HTTPException(status_code=400, detail=f"Failed to fetch URL: {str(e)}")
+            except Exception as e:
+                logger.error(f"Error processing URL image: {e}", exc_info=True)
+                raise HTTPException(status_code=400, detail=f"Failed to process URL image: {str(e)}")
+        else:
+            raise HTTPException(status_code=400, detail="Either file or url parameter is required")
+        
+        # Predict if we have an image
+        if image:
+            logger.info("Preprocessing image...")
+            image_tensor = transform(image).unsqueeze(0).to(DEVICE)
+            
+            logger.info("Running inference...")
+            with torch.no_grad():
+                logits = model(image_tensor)
+                probs = torch.softmax(logits, dim=1)
+                confidence, class_idx = torch.max(probs, dim=1)
+            
+            class_idx = class_idx.item()
+            confidence = confidence.item()
+            
+            # Get Top 5 predictions
+            top_5_indices = torch.argsort(probs[0], descending=True)[:5]
+            top_5_predictions = {
+                CLASS_LABELS[idx.item()]: float(probs[0, idx].item())
+                for idx in top_5_indices
+            }
+            
+            logger.info(f"Prediction: {CLASS_LABELS[class_idx]} ({confidence:.2%})")
+            
+            return JSONResponse({
+                "success": True,
+                "breed": CLASS_LABELS[class_idx],
+                "confidence": confidence,
+                "top_5": top_5_predictions
+            })
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Prediction error: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
+
+@app.post("/api/predict-selected-image")
+async def predict_selected_image(image_url: str):
+    """
+    Predict dog breed from a specific selected image URL
+    
+    Args:
+        image_url: URL of the image to predict
         
     Returns:
         json: Dictionary containing prediction results
@@ -138,17 +268,21 @@ async def predict(file: UploadFile = File(...)):
         raise HTTPException(status_code=503, detail="Model not loaded")
     
     try:
-        # Read image
-        contents = await file.read()
-        if not contents:
-            raise HTTPException(status_code=400, detail="File is empty. Please upload an image file.")
+        logger.info(f"Processing selected image: {image_url}")
         
-        image = Image.open(io.BytesIO(contents)).convert("RGB")
+        import requests
         
-        # Preprocess
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        response = requests.get(image_url, headers=headers, timeout=10)
+        
+        image = Image.open(io.BytesIO(response.content)).convert("RGB")
+        
+        logger.info("Preprocessing image...")
         image_tensor = transform(image).unsqueeze(0).to(DEVICE)
         
-        # Inference
+        logger.info("Running inference...")
         with torch.no_grad():
             logits = model(image_tensor)
             probs = torch.softmax(logits, dim=1)
@@ -173,8 +307,6 @@ async def predict(file: UploadFile = File(...)):
             "top_5": top_5_predictions
         })
     
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Prediction error: {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=f"Error: {str(e)}")

@@ -224,6 +224,8 @@ async def predict(file: UploadFile = File(None), url: str = Query(None)):
     1. 文件上传 (multipart/form-data with file)
     2. 直接图像 URL (url parameter - 直接指向图片文件)
     3. 网页 URL (url parameter - 自动提取网页中的图片)
+    
+    Updated Feb 27, 2026: Improved file upload handling with optional parameters
     """
     if not MODEL_LOADED:
         return JSONResponse(

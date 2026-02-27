@@ -255,15 +255,38 @@ async def predict(file: UploadFile = File(None), url: str = Query(None)):
                     content={"success": False, "error": "Uploaded file is empty or corrupted"}
                 )
             
+            # Diagnostic logging
+            logger.info(f"File upload: {file.filename}")
+            logger.info(f"File size: {len(contents)} bytes")
+            logger.info(f"File content-type: {file.content_type}")
+            logger.info(f"File header (first 16 bytes): {contents[:16].hex()}")
+            
+            # Check JPEG magic number
+            if file.filename and file.filename.lower().endswith('.jpg') or file.filename.lower().endswith('.jpeg'):
+                if not (contents[0] == 0xFF and contents[1] == 0xD8):
+                    logger.error(f"JPEG magic number invalid. Got: {contents[0]:02x} {contents[1]:02x}, expected FF D8")
+            
             try:
                 image = Image.open(io.BytesIO(contents)).convert("RGB")
+                logger.info(f"Image opened successfully: {image.size} {image.format}")
             except Exception as e:
                 error_str = str(e).lower()
                 logger.error(f"Failed to parse uploaded image: {e}")
+                logger.error(f"File details - Size: {len(contents)} bytes, Type: {file.content_type}, Name: {file.filename}")
+                logger.error(f"First 32 bytes (hex): {contents[:32].hex()}")
+                
+                # Try to verify if file is truncated
+                try:
+                    # Try to open with verify=False to see if it's just a verify issue
+                    img_test = Image.open(io.BytesIO(contents))
+                    logger.warning("Image can be opened with verify=False, might be file truncation issue")
+                except:
+                    logger.error("File is completely invalid even with verify=False")
+                
                 if "cannot identify" in error_str or "unidentified" in error_str:
                     return JSONResponse(
                         status_code=400,
-                        content={"success": False, "error": "The uploaded file is not a valid image. Please upload a JPEG, PNG, GIF, or WebP file."}
+                        content={"success": False, "error": f"The uploaded file appears corrupted or incomplete. File size: {len(contents)} bytes. Try re-uploading the file."}
                     )
                 else:
                     return JSONResponse(

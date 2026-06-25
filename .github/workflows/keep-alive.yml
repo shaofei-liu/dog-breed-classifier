@@ -1,0 +1,41 @@
+name: Keep Hugging Face Space Awake
+
+on:
+  schedule:
+    # Run every 12 hours to keep Space active (HF free spaces need regular activity)
+    - cron: '0 0,12 * * *'
+  workflow_dispatch:
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Keep Dog Breed Classifier Space Awake
+        run: |
+          # Load sample image and send to space to trigger actual API usage
+          SPACE_URL="${{ secrets.HF_SPACE_URL }}"
+          
+          if [ -z "$SPACE_URL" ]; then
+            echo "⚠️ HF_SPACE_URL secret not set. Please configure it in repository secrets."
+            echo "Set it to: https://<username>-dog-breed-classification.hf.space"
+            exit 0
+          fi
+          
+          echo "Attempting to activate Dog Breed Classifier Space..."
+          
+          # First, load the space page with timeout and retries
+          response=$(curl -s -o /dev/null -w "%{http_code}" -L "$SPACE_URL" --connect-timeout 10 --max-time 30 2>/dev/null || echo "000")
+          echo "Space Page Status: $response"
+          
+          # Try to access the space's API endpoint
+          api_response=$(curl -s -o /dev/null -w "%{http_code}" -L "$SPACE_URL/api/predict" --connect-timeout 10 --max-time 30 2>/dev/null || echo "000")
+          echo "API Status: $api_response"
+          
+          if [ "$response" = "200" ] || [ "$response" = "307" ]; then
+            echo "✅ Space is awake and responding!"
+          else
+            echo "⚠️ Space returned status: $response - Space may be sleeping"
+          fi
+          
+          echo "Keep-alive activation completed at $(date +%Y-%m-%d\ %H:%M:%S\ UTC)"

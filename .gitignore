@@ -1,0 +1,34 @@
+# 大模型文件
+output/*.bin
+output/*.pt
+output/*.pth
+
+# 图像文件
+*.jpg
+*.jpeg
+*.png
+*.gif
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log

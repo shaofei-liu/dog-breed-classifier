@@ -50,3 +50,8 @@ project description references the publicly available
 [Stanford Dogs dataset](http://vision.stanford.edu/aditya/ImageNetDogs/), but
 the dataset files are absent and the checkpoint's training provenance is not
 established by this checkout.
+
+## Contact and links
+
+- **Personal website and contact:** [shaofeiliu.com](https://www.shaofeiliu.com/)
+- **Questions about this code:** open an issue in this repository.
